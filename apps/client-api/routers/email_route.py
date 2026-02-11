@@ -7,7 +7,8 @@ from services.email_service import (
     send_booking_email_to_client,
     send_booking_email_to_creator,
     send_booking_accepted_email_to_client,
-    send_booking_declined_email_to_client
+    send_booking_declined_email_to_client,
+    send_payment_success_email_to_client
 )
 
 router = APIRouter(prefix="/api/email", tags=["Email"])
@@ -51,6 +52,21 @@ class BookingDeclinedEmailRequest(BaseModel):
     creator_name: str
     booking_id: str
     decline_message: Optional[str] = None
+
+
+class PaymentSuccessEmailRequest(BaseModel):
+    client_email: EmailStr
+    client_name: str
+    creator_name: str
+    service_type: Optional[str] = None
+    event_date: Optional[str] = None
+    location: Optional[str] = None
+    booking_id: str
+    total_amount: Optional[str] = None
+    platform_fee: Optional[str] = None
+    gst: Optional[str] = None
+    final_amount: Optional[str] = None
+    transaction_id: Optional[str] = None
 
 
 # =========================
@@ -152,4 +168,30 @@ async def send_booking_declined_email(payload: BookingDeclinedEmailRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to send booking declined email: {str(e)}"
+        )
+
+
+@router.post("/payment/success", response_model=EmailResponse, status_code=status.HTTP_200_OK)
+async def send_payment_success_email(payload: PaymentSuccessEmailRequest):
+    """Send payment receipt email to client after successful escrow payment"""
+    try:
+        await send_payment_success_email_to_client(
+            client_email=payload.client_email,
+            client_name=payload.client_name,
+            creator_name=payload.creator_name,
+            service_type=payload.service_type,
+            event_date=payload.event_date,
+            location=payload.location,
+            booking_id=payload.booking_id,
+            total_amount=payload.total_amount,
+            platform_fee=payload.platform_fee,
+            gst=payload.gst,
+            final_amount=payload.final_amount,
+            transaction_id=payload.transaction_id
+        )
+        return {"message": "Payment success email sent to client"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send payment success email: {str(e)}"
         )

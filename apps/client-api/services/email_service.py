@@ -223,6 +223,68 @@ support@visionmatch.com
     send_email(client_email, subject, body)
 
 
+async def send_payment_success_email_to_client(
+    client_email: str,
+    client_name: str,
+    creator_name: str,
+    service_type: str,
+    event_date: Optional[str],
+    location: Optional[str],
+    booking_id: str,
+    total_amount: Optional[str] = None,
+    platform_fee: Optional[str] = None,
+    gst: Optional[str] = None,
+    final_amount: Optional[str] = None,
+    transaction_id: Optional[str] = None
+):
+    """Send payment success email to client after escrow payment"""
+    subject = "💰 Payment Successful | VisionMatch"
+
+    body = f"""
+Hello {client_name},
+
+Your payment has been successfully processed and is now securely held in escrow!
+
+──────────────────────────────
+PAYMENT RECEIPT
+──────────────────────────────
+
+Booking ID: {booking_id}
+Transaction ID: {transaction_id or 'N/A'}
+Creator: {creator_name}
+Service: {service_type or 'Photography/Videography'}
+Event Date: {event_date or 'To be confirmed'}
+Location: {location or 'To be confirmed'}
+
+──────────────────────────────
+PAYMENT BREAKDOWN
+──────────────────────────────
+
+Base Amount: {total_amount or 'N/A'}
+Platform Fee (10%): {platform_fee or 'N/A'}
+GST (18%): {gst or 'N/A'}
+──────────────────────────────
+Total Paid: {final_amount or 'N/A'}
+
+──────────────────────────────
+
+Your funds are safely held in escrow and will be released to the creator upon successful project completion.
+
+What's Next?
+1. Connect with {creator_name} to finalize event details
+2. Review deliverables after the event
+3. Confirm completion to release the payment
+
+If you have any questions, contact our support team.
+
+Best regards,
+VisionMatch Team
+support@visionmatch.com
+"""
+
+    send_email(client_email, subject, body)
+
+
 def send_email(to_email: str, subject: str, body: str):
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASSWORD, FROM_EMAIL]):
         raise Exception("SMTP configuration is incomplete")

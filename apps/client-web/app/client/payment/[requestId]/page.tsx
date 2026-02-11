@@ -13,6 +13,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Auth } from '@/services/Auth';
 import { getRequest, getCreator } from '@/services/creatorProfile';
+import { Email } from '@/services/email';
 import { cn } from '@vision-match/utils-js';
 import { toast } from 'react-hot-toast';
 
@@ -417,6 +418,26 @@ export default function PaymentPage() {
                 // Update local storage
                 const updatedData = { ...paymentData, status: 'escrowed' };
                 localStorage.setItem(payment_id, JSON.stringify(updatedData));
+
+                // Send payment success email to client
+                try {
+                  await Email.sendPaymentSuccessEmail({
+                    client_email: clientId!,
+                    client_name: clientId?.split('@')[0] || 'Client',
+                    creator_name: orderDetails.creatorName,
+                    service_type: orderDetails.projectType,
+                    event_date: orderDetails.eventDate,
+                    location: orderDetails.location,
+                    booking_id: requestId,
+                    total_amount: `₹${orderDetails.totalAmount.toLocaleString()}`,
+                    platform_fee: `₹${orderDetails.platformFee.toLocaleString()}`,
+                    gst: `₹${orderDetails.gst.toLocaleString()}`,
+                    final_amount: `₹${orderDetails.finalAmount.toLocaleString()}`,
+                    transaction_id: response.razorpay_payment_id
+                  });
+                } catch (emailErr) {
+                  console.error('Failed to send payment email:', emailErr);
+                }
               }
             } catch (err: unknown) {
               console.error('Verification failed', err);
