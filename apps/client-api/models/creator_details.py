@@ -7,6 +7,7 @@ class CreatorDetailsRequest(BaseModel):
     full_name: str
     phone_number: Optional[str] = None
     city: str
+    state: Optional[str] = ""
     operating_locations: List[str] = []
     years_experience: int
     bio: Optional[str] = ""

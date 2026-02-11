@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 import { Auth } from "@/services/Auth";
 import { clientOnboardingService } from "@/services/clientOnboarding";
 
@@ -682,40 +683,18 @@ export default function ClientOnboardingPage() {
                   </div>
 
                   {/* City & State */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        className="text-xs font-bold uppercase tracking-widest mb-2 block"
-                        style={{ color: palette.gray600 }}
-                      >
-                        City *
-                      </label>
-                      <Input
-                        className="h-12 rounded-xl border-gray-200 bg-white/50 focus:ring-2 focus:ring-pink-400"
-                        placeholder="Mumbai"
-                        value={formData.city}
-                        onChange={(e) =>
-                          setFormData({ ...formData, city: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label
-                        className="text-xs font-bold uppercase tracking-widest mb-2 block"
-                        style={{ color: palette.gray600 }}
-                      >
-                        State *
-                      </label>
-                      <Input
-                        className="h-12 rounded-xl border-gray-200 bg-white/50 focus:ring-2 focus:ring-pink-400"
-                        placeholder="Maharashtra"
-                        value={formData.state}
-                        onChange={(e) =>
-                          setFormData({ ...formData, state: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
+                  <CityAutocomplete
+                    city={formData.city}
+                    state={formData.state}
+                    onCityChange={(city) =>
+                      setFormData(prev => ({ ...prev, city }))
+                    }
+                    onStateChange={(state) =>
+                      setFormData(prev => ({ ...prev, state }))
+                    }
+                    iconColor={palette.pink}
+                    inputClassName="h-12 pl-12 rounded-xl border-gray-200 bg-white/50 focus:ring-2 focus:ring-pink-400 text-gray-600"
+                  />
 
                   {/* Pincode */}
                   <div>

@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 // Import centralized details service
 import { detailsService } from "@/services/onboarding";
 
@@ -35,6 +36,7 @@ const DetailsOnboarding = () => {
     fullName: "",
     phoneNumber: "",
     city: "",
+    state: "",
     experience: "",
     bio: "",
     travelAvailable: true,
@@ -54,6 +56,7 @@ const DetailsOnboarding = () => {
             fullName: data.full_name || "",
             phoneNumber: data.phone_number || "",
             city: data.city || "",
+            state: data.state || "",
             experience: data.years_experience?.toString() || "",
             bio: data.bio || "",
             travelAvailable: data.travel_available ?? true,
@@ -97,6 +100,7 @@ const DetailsOnboarding = () => {
         full_name: formData.fullName,
         phone_number: formData.phoneNumber,
         city: formData.city,
+        state: formData.state,
         operating_locations: [formData.city],
         years_experience: parseInt(formData.experience),
         bio: formData.bio,
@@ -186,16 +190,14 @@ const DetailsOnboarding = () => {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-widest mb-2 block" style={{ color: palette.gray600 }}>Base City *</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: palette.blue }} />
-                    <Input
-                      className="h-12 pl-12 rounded-xl border-gray-100 bg-white/50 text-gray-600"
-                      placeholder="Mumbai, Maharashtra"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    />
-                  </div>
+                  <label className="text-xs font-bold uppercase tracking-widest mb-2 block" style={{ color: palette.gray600 }}>Base Location *</label>
+                  <CityAutocomplete
+                    city={formData.city}
+                    state={formData.state}
+                    onCityChange={(city) => setFormData(prev => ({ ...prev, city }))}
+                    onStateChange={(state) => setFormData(prev => ({ ...prev, state }))}
+                    iconColor={palette.blue}
+                  />
                 </div>
 
                 <div>
