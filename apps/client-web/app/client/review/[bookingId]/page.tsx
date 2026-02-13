@@ -109,10 +109,12 @@ const AspectRatingCard = ({
   aspect,
   rating,
   setRating,
+  interactive = true,
 }: {
   aspect: typeof reviewAspects[0];
   rating: number;
   setRating: (rating: number) => void;
+  interactive?: boolean;
 }) => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
@@ -124,7 +126,7 @@ const AspectRatingCard = ({
         <h4 className="font-medium text-gray-900">{aspect.label}</h4>
         <p className="text-xs text-gray-500">{aspect.description}</p>
       </div>
-      <StarRating rating={rating} setRating={setRating} size="sm" />
+      <StarRating rating={rating} setRating={interactive ? setRating : undefined} size="sm" interactive={interactive} />
     </div>
   </motion.div>
 );
@@ -153,6 +155,8 @@ export default function ReviewPage() {
   const [submitted, setSubmitted] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
   const [bookingDetails, setBookingDetails] = useState<BookingDetails | null>(null);
+  const [existingReview, setExistingReview] = useState<any | null>(null);
+  const [isViewMode, setIsViewMode] = useState(false);
   
   // Review states
   const [overallRating, setOverallRating] = useState(0);
@@ -181,7 +185,7 @@ export default function ReviewPage() {
     checkAuth();
   }, [router]);
 
-  // Fetch booking details
+  // Fetch booking details and check for existing review
   const fetchBookingDetails = useCallback(async () => {
     if (!bookingId) return;
     
@@ -199,6 +203,25 @@ export default function ReviewPage() {
           projectType: data.project_type || data.projectType || data.category || 'Photography',
           eventDate: data.event_date || data.eventDate || 'TBD',
         });
+      }
+      
+      // Check if review already exists
+      try {
+        const reviewStatus = await axiosInstance.get(`/api/reviews/check/${bookingId}`);
+        if (reviewStatus.data.hasReview && reviewStatus.data.review) {
+          const review = reviewStatus.data.review;
+          setExistingReview(review);
+          setIsViewMode(true);
+          // Pre-fill the form with existing review data
+          setOverallRating(review.overallRating || 0);
+          setAspectRatings(review.aspects || {});
+          setSelectedTags(review.selectedTags || []);
+          setReviewText(review.review || '');
+          setSharePublicly(review.sharePublicly ?? true);
+        }
+      } catch (reviewErr) {
+        // No existing review, that's fine
+        console.log('No existing review found');
       }
     } catch (err) {
       console.error('Failed to fetch booking:', err);
@@ -243,13 +266,14 @@ export default function ReviewPage() {
     setSubmitting(true);
     
     try {
-      await axiosInstance.post('/reviews', {
+      await axiosInstance.post('/api/reviews/create', {
         bookingId,
+        clientId,
         creatorId: bookingDetails?.creatorId,
         overallRating,
-        aspectRatings,
+        aspects: aspectRatings,
         selectedTags,
-        reviewText: reviewText.trim(),
+        review: reviewText.trim(),
         sharePublicly,
       });
       
@@ -373,14 +397,19 @@ export default function ReviewPage() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-50 border border-amber-200 mb-4"
             >
               <Star className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-semibold text-amber-700">Leave a Review</span>
+              <span className="text-sm font-semibold text-amber-700">
+                {isViewMode ? 'Your Review' : 'Leave a Review'}
+              </span>
             </motion.div>
             
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">
-              How was your experience?
+              {isViewMode ? 'Your Review' : 'How was your experience?'}
             </h1>
             <p className="text-gray-500">
-              Your feedback helps {bookingDetails?.creatorName} improve and helps others find great creators.
+              {isViewMode 
+                ? `You reviewed ${bookingDetails?.creatorName} on ${existingReview?.createdAt ? new Date(existingReview.createdAt).toLocaleDateString() : 'this project'}.`
+                : `Your feedback helps ${bookingDetails?.creatorName} improve and helps others find great creators.`
+              }
             </p>
           </motion.div>
 
@@ -420,9 +449,14 @@ export default function ReviewPage() {
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">Overall Rating</h3>
             <div className="flex flex-col items-center gap-3">
-              <StarRating rating={overallRating} setRating={setOverallRating} size="lg" />
+              <StarRating 
+                rating={overallRating} 
+                setRating={isViewMode ? undefined : setOverallRating} 
+                size="lg" 
+                interactive={!isViewMode}
+              />
               <p className="text-gray-500 text-sm">
-                {overallRating === 0 && 'Tap to rate'}
+                {overallRating === 0 && (isViewMode ? 'No rating' : 'Tap to rate')}
                 {overallRating === 1 && 'Poor'}
                 {overallRating === 2 && 'Fair'}
                 {overallRating === 3 && 'Good'}
@@ -447,6 +481,7 @@ export default function ReviewPage() {
                   aspect={aspect}
                   rating={aspectRatings[aspect.id] || 0}
                   setRating={(rating) => setAspectRating(aspect.id, rating)}
+                  interactive={!isViewMode}
                 />
               ))}
             </div>
@@ -464,14 +499,16 @@ export default function ReviewPage() {
               {feedbackTags.map((tag) => (
                 <motion.button
                   key={tag.id}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleTag(tag.id)}
+                  whileHover={isViewMode ? {} : { scale: 1.05 }}
+                  whileTap={isViewMode ? {} : { scale: 0.95 }}
+                  onClick={() => !isViewMode && toggleTag(tag.id)}
+                  disabled={isViewMode}
                   className={cn(
                     "px-4 py-2 rounded-full text-sm font-medium transition-all",
                     selectedTags.includes(tag.id)
                       ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/30"
-                      : "bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300"
+                      : "bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300",
+                    isViewMode && "cursor-default"
                   )}
                 >
                   {tag.emoji} {tag.label}
@@ -487,17 +524,27 @@ export default function ReviewPage() {
             transition={{ delay: 0.5 }}
             className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200 p-6 mb-6 shadow-sm"
           >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Write Your Review</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {isViewMode ? 'Your Review' : 'Write Your Review'}
+            </h3>
             <textarea
               value={reviewText}
-              onChange={(e) => setReviewText(e.target.value)}
-              placeholder="Tell others about your experience working with this creator..."
+              onChange={(e) => !isViewMode && setReviewText(e.target.value)}
+              placeholder={isViewMode ? '' : "Tell others about your experience working with this creator..."}
               rows={5}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all resize-none"
+              readOnly={isViewMode}
+              className={cn(
+                "w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 transition-all resize-none",
+                isViewMode 
+                  ? "cursor-default" 
+                  : "focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
+              )}
             />
-            <p className="text-xs text-gray-400 mt-2">
-              {reviewText.length}/500 characters
-            </p>
+            {!isViewMode && (
+              <p className="text-xs text-gray-400 mt-2">
+                {reviewText.length}/500 characters
+              </p>
+            )}
           </motion.div>
 
           {/* Privacy Toggle */}
@@ -508,14 +555,23 @@ export default function ReviewPage() {
             className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 mb-8"
           >
             <div>
-              <p className="font-medium text-gray-900">Share publicly</p>
-              <p className="text-sm text-gray-500">Your review will be visible on the creator's profile</p>
+              <p className="font-medium text-gray-900">
+                {isViewMode ? 'Visibility' : 'Share publicly'}
+              </p>
+              <p className="text-sm text-gray-500">
+                {isViewMode 
+                  ? (sharePublicly ? 'This review is visible on the creator\'s profile' : 'This review is private')
+                  : 'Your review will be visible on the creator\'s profile'
+                }
+              </p>
             </div>
             <button
-              onClick={() => setSharePublicly(!sharePublicly)}
+              onClick={() => !isViewMode && setSharePublicly(!sharePublicly)}
+              disabled={isViewMode}
               className={cn(
                 "relative w-14 h-8 rounded-full transition-colors",
-                sharePublicly ? "bg-pink-500" : "bg-gray-300"
+                sharePublicly ? "bg-pink-500" : "bg-gray-300",
+                isViewMode && "cursor-default opacity-80"
               )}
             >
               <div className={cn(
@@ -525,29 +581,48 @@ export default function ReviewPage() {
             </button>
           </motion.div>
 
-          {/* Submit Button */}
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleSubmitReview}
-            disabled={submitting || overallRating === 0}
-            className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-pink-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {submitting ? (
-              <>
-                <Loader className="h-5 w-5 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              <>
-                <Send className="h-5 w-5" />
-                Submit Review
-              </>
-            )}
-          </motion.button>
+          {/* Submit Button - only show in write mode */}
+          {!isViewMode && (
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSubmitReview}
+              disabled={submitting || overallRating === 0}
+              className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-pink-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {submitting ? (
+                <>
+                  <Loader className="h-5 w-5 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="h-5 w-5" />
+                  Submit Review
+                </>
+              )}
+            </motion.button>
+          )}
+
+          {/* Back to Dashboard button - show in view mode */}
+          {isViewMode && (
+            <Link href={`/client/dashboard/${clientId}`} className="w-full">
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full py-4 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-semibold rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <Home className="h-5 w-5" />
+                Back to Dashboard
+              </motion.button>
+            </Link>
+          )}
         </div>
       </main>
     </div>

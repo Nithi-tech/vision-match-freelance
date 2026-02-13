@@ -36,9 +36,11 @@ class ReviewCreate(BaseModel):
     clientId: str
     creatorId: str
     overallRating: int
-    aspects: dict  # {quality: 5, communication: 4, ...}
+    aspects: Optional[dict] = {}  # {quality: 5, communication: 4, ...}
     review: str
     recommend: bool = True
+    selectedTags: Optional[List[str]] = []
+    sharePublicly: bool = True
 
 
 # =========================
@@ -422,9 +424,11 @@ def create_review(payload: ReviewCreate):
             "clientId": payload.clientId,
             "creatorId": payload.creatorId,
             "overallRating": payload.overallRating,
-            "aspects": payload.aspects,
+            "aspects": payload.aspects or {},
             "review": payload.review,
             "recommend": payload.recommend,
+            "selectedTags": payload.selectedTags or [],
+            "sharePublicly": payload.sharePublicly,
             "createdAt": int(time.time() * 1000)
         }
         review_ref.set(review_data)
@@ -486,3 +490,80 @@ def get_creator_reviews(creator_id: str):
         "count": len(creator_reviews),
         "data": creator_reviews
     }
+
+
+@router.get("/api/reviews/check/{request_id}")
+def check_review_status(request_id: str):
+    """
+    Check if a review exists for a given request ID.
+    Used to determine if "Write Review" or "View Review" button should be shown.
+    """
+    try:
+        # First, find the booking by requestId
+        booking_query = db.collection(BOOKINGS_COLLECTION).where("requestId", "==", request_id).limit(1)
+        booking_docs = list(booking_query.stream())
+        
+        if not booking_docs:
+            # Also try with the request_id as booking_id directly
+            booking_doc = db.collection(BOOKINGS_COLLECTION).document(request_id).get()
+            if not booking_doc.exists:
+                return {
+                    "success": True,
+                    "hasReview": False,
+                    "bookingId": None,
+                    "reviewId": None,
+                    "message": "No booking found for this request"
+                }
+            booking_data = booking_doc.to_dict()
+            booking_id = request_id
+        else:
+            booking_data = booking_docs[0].to_dict()
+            booking_id = booking_data.get("id") or booking_docs[0].id
+        
+        # Check if booking has been reviewed
+        reviewed = booking_data.get("reviewed", False)
+        review_id = booking_data.get("reviewId")
+        
+        # If reviewed, fetch the review details
+        review_data = None
+        if reviewed and review_id:
+            review_doc = db.collection(REVIEWS_COLLECTION).document(review_id).get()
+            if review_doc.exists:
+                review_data = review_doc.to_dict()
+        
+        return {
+            "success": True,
+            "hasReview": reviewed,
+            "bookingId": booking_id,
+            "reviewId": review_id,
+            "review": review_data
+        }
+        
+    except Exception as e:
+        print(f"Error checking review status: {e}")
+        return {
+            "success": False,
+            "hasReview": False,
+            "bookingId": None,
+            "reviewId": None,
+            "message": str(e)
+        }
+
+
+@router.get("/api/reviews/{review_id}")
+def get_review_by_id(review_id: str):
+    """Get a specific review by ID"""
+    try:
+        review_doc = db.collection(REVIEWS_COLLECTION).document(review_id).get()
+        
+        if not review_doc.exists:
+            raise HTTPException(status_code=404, detail="Review not found")
+        
+        return {
+            "success": True,
+            "data": review_doc.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

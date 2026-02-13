@@ -356,6 +356,48 @@ export const getCreatorReviewsList = async (creatorId: string) => {
 };
 
 /**
+ * Check if a review exists for a request/booking
+ * Used to determine whether to show "Write Review" or "View Review" button
+ */
+export const checkReviewStatus = async (requestId: string): Promise<{
+  hasReview: boolean;
+  bookingId: string | null;
+  reviewId: string | null;
+  review: any | null;
+}> => {
+  try {
+    const response = await axiosInstance.get(`/api/reviews/check/${requestId}`);
+    return {
+      hasReview: response.data?.hasReview || false,
+      bookingId: response.data?.bookingId || null,
+      reviewId: response.data?.reviewId || null,
+      review: response.data?.review || null
+    };
+  } catch (error) {
+    console.error('Failed to check review status:', error);
+    return {
+      hasReview: false,
+      bookingId: null,
+      reviewId: null,
+      review: null
+    };
+  }
+};
+
+/**
+ * Get a specific review by ID
+ */
+export const getReviewById = async (reviewId: string) => {
+  try {
+    const response = await axiosInstance.get(`/api/reviews/${reviewId}`);
+    return response.data?.data || null;
+  } catch (error) {
+    console.error('Failed to get review:', error);
+    return null;
+  }
+};
+
+/**
  * Get payment status for a request
  * Returns payment details including status (pending, escrowed, completed)
  */

@@ -27,9 +27,11 @@ import {
   Bell,
   Settings,
   Phone,
+  Star,
+  Eye,
 } from 'lucide-react';
 import { useRouter } from "next/navigation";
-import { getRequestDetails, getPaymentStatusByRequest, getCreator, initiateCall } from '@/services/creatorProfile';
+import { getRequestDetails, getPaymentStatusByRequest, getCreator, initiateCall, checkReviewStatus } from '@/services/creatorProfile';
 import { Auth } from '@/services/Auth';
 import { Header } from '@/components/layout/Header';
 import { cn } from '@vision-match/utils-js';
@@ -132,6 +134,9 @@ export default function DashboardPage() {
   // Payment status map: requestId -> payment status (escrowed/completed)
   const [paymentStatuses, setPaymentStatuses] = useState<Record<string, { status: string; creatorPhone?: string }>>({});
 
+  // Review status map: requestId -> { hasReview, bookingId, reviewId }
+  const [reviewStatuses, setReviewStatuses] = useState<Record<string, { hasReview: boolean; bookingId: string | null; reviewId: string | null }>>({});
+
   // Chat / Negotiation States
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<Array<{ id: string; sender: 'client' | 'creator'; text: string; timestamp: Date }>>([]);
@@ -233,6 +238,33 @@ export default function DashboardPage() {
           }
         });
         setPaymentStatuses(statusMap);
+        
+        // Fetch review status for completed payments
+        const completedRequests = paidRequests.filter(req => {
+          const paymentStatus = statusMap[req.id]?.status;
+          return paymentStatus === 'completed' || req.status === 'completed';
+        });
+        
+        if (completedRequests.length > 0) {
+          const reviewPromises = completedRequests.map(async (req) => {
+            const reviewStatus = await checkReviewStatus(req.id);
+            return {
+              requestId: req.id,
+              ...reviewStatus
+            };
+          });
+          
+          const reviewResults = await Promise.all(reviewPromises);
+          const reviewMap: Record<string, { hasReview: boolean; bookingId: string | null; reviewId: string | null }> = {};
+          reviewResults.forEach(r => {
+            reviewMap[r.requestId] = {
+              hasReview: r.hasReview,
+              bookingId: r.bookingId,
+              reviewId: r.reviewId
+            };
+          });
+          setReviewStatuses(reviewMap);
+        }
       }
 
     } catch (err: unknown) {
@@ -549,10 +581,10 @@ export default function DashboardPage() {
                         </Link>
                       )}
                       
-                      {/* Payment button for accepted status - hide if payment already completed */}
+                      {/* Payment button for accepted status - hide if payment already escrowed or completed */}
                       {request.status === 'accepted' && 
                        !(paymentStatuses[request.id] && 
-                         (paymentStatuses[request.id].status === 'completed')) && (
+                         (paymentStatuses[request.id].status === 'escrowed' || paymentStatuses[request.id].status === 'completed')) && (
                         <Link href={`/client/payment/${request.id}`} className="flex-1">
                           <motion.button
                             whileHover={{ scale: 1.02 }}
@@ -579,9 +611,9 @@ export default function DashboardPage() {
                         </Link>
                       )}
                       
-                      {/* Call Creator button - show when payment is escrowed or completed */}
+                      {/* Call Creator button - show when payment is escrowed (not after completion) */}
                       {paymentStatuses[request.id] && 
-                       (paymentStatuses[request.id].status === 'escrowed' || paymentStatuses[request.id].status === 'completed') && (
+                       paymentStatuses[request.id].status === 'escrowed' && (
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
@@ -596,6 +628,36 @@ export default function DashboardPage() {
                           <Phone className="h-4 w-4" />
                           Call Creator
                         </motion.button>
+                      )}
+                      
+                      {/* Write Review button - show when payment is completed and no review yet */}
+                      {paymentStatuses[request.id]?.status === 'completed' && 
+                       !reviewStatuses[request.id]?.hasReview && (
+                        <Link href={`/client/review/${request.id}`} className="flex-1">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Star className="h-4 w-4" />
+                            Write Review
+                          </motion.button>
+                        </Link>
+                      )}
+                      
+                      {/* View Review button - show when review already submitted */}
+                      {paymentStatuses[request.id]?.status === 'completed' && 
+                       reviewStatuses[request.id]?.hasReview && (
+                        <Link href={`/client/review/${request.id}`} className="flex-1">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full py-3 px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl border border-gray-200 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Review
+                          </motion.button>
+                        </Link>
                       )}
                     </div>
                   </motion.div>
@@ -710,10 +772,10 @@ export default function DashboardPage() {
                         </Link>
                       )}
                       
-                      {/* Payment button for accepted status - hide if payment already completed */}
+                      {/* Payment button for accepted status - hide if payment already escrowed or completed */}
                       {request.status === 'accepted' && 
                        !(paymentStatuses[request.id] && 
-                         (paymentStatuses[request.id].status === 'completed')) && (
+                         (paymentStatuses[request.id].status === 'escrowed' || paymentStatuses[request.id].status === 'completed')) && (
                         <Link href={`/client/payment/${request.id}`} className="flex-1">
                           <motion.button
                             whileHover={{ scale: 1.02 }}
@@ -740,9 +802,9 @@ export default function DashboardPage() {
                         </Link>
                       )}
                       
-                      {/* Call Creator button - show when payment is escrowed or completed */}
+                      {/* Call Creator button - show when payment is escrowed (not after completion) */}
                       {paymentStatuses[request.id] && 
-                       (paymentStatuses[request.id].status === 'escrowed' || paymentStatuses[request.id].status === 'completed') && (
+                       paymentStatuses[request.id].status === 'escrowed' && (
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
@@ -757,6 +819,36 @@ export default function DashboardPage() {
                           <Phone className="h-4 w-4" />
                           Call Creator
                         </motion.button>
+                      )}
+                      
+                      {/* Write Review button - show when payment is completed and no review yet */}
+                      {paymentStatuses[request.id]?.status === 'completed' && 
+                       !reviewStatuses[request.id]?.hasReview && (
+                        <Link href={`/client/review/${request.id}`} className="flex-1">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full py-3 px-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Star className="h-4 w-4" />
+                            Write Review
+                          </motion.button>
+                        </Link>
+                      )}
+                      
+                      {/* View Review button - show when review already submitted */}
+                      {paymentStatuses[request.id]?.status === 'completed' && 
+                       reviewStatuses[request.id]?.hasReview && (
+                        <Link href={`/client/review/${request.id}`} className="flex-1">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full py-3 px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl border border-gray-200 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Review
+                          </motion.button>
+                        </Link>
                       )}
                     </div>
                   </motion.div>
